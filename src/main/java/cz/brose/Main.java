@@ -1,5 +1,8 @@
 package cz.brose;
 
+import cz.brose.lyrics.SRTHandler;
+import cz.brose.lyrics.SRTHandlerImpl;
+import cz.brose.lyrics.SimpleSRTHandler;
 import cz.brose.sound.MinimFileSystemHandler;
 import ddf.minim.AudioPlayer;
 import ddf.minim.Minim;
@@ -10,7 +13,6 @@ import processing.core.PVector;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Objects;
 
 /**
  * TODO package
@@ -74,8 +76,7 @@ public class Main extends PApplet {
         textToDisplay = "";
 
         //Lyrics handling
-        srtHandler = new SRTHandler("src/main/resources/" + inputSongName + ".srt");
-        nextLyricsStartMillis = srtHandler.getNextLyricsStartTime();
+        srtHandler = new SimpleSRTHandler("src/main/resources/" + inputSongName + ".srt");
 
         //Video settings
         recording = false;
@@ -123,14 +124,7 @@ public class Main extends PApplet {
 
     private void drawLyrics(int fill) {
         pushStyle();
-        if(song.position() >= nextLyricsStartMillis) { //let it run in different thread?
-            textToDisplay = srtHandler.getNextLyrics(song.position());
-            nextLyricsStartMillis = srtHandler.getNextLyricsStartTime();
-            nextLyricsEndMillis = srtHandler.getNextLyricsEndTime();
-        }
-        if(song.position() >= nextLyricsEndMillis){
-            textToDisplay = "";
-        }
+        textToDisplay = srtHandler.getNextLyrics(song.position());
         blendMode(ADD);
         fill(fill);
         text(textToDisplay,center.x,center.y);

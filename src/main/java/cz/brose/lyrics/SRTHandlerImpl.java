@@ -1,4 +1,4 @@
-package cz.brose;
+package cz.brose.lyrics;
 
 import org.fredy.jsrt.api.SRT;
 import org.fredy.jsrt.api.SRTInfo;
@@ -11,11 +11,11 @@ import java.util.ArrayList;
 /**
  * @author Vojtech Bruza
  */
-public class SRTHandler {
+public class SRTHandlerImpl implements SRTHandler {
     ArrayList<SRT> srts;
     private int srtIndex;
 
-    SRTHandler(String srtFileName) {
+    public SRTHandlerImpl(String srtFileName) {
         SRTInfo inputSRT;
         try {
             inputSRT = SRTReader.read(new File(srtFileName));
@@ -32,7 +32,8 @@ public class SRTHandler {
 
     final long ONEHOURINMILLIS = 3600000;
 
-    String getNextLyrics(long millis){
+    @Override
+    public String getNextLyrics(long millis){
         if(srtIndex + 1 >= srts.size()){
             System.out.println("none");
             return ""; //there are no other lyrics
@@ -66,7 +67,7 @@ public class SRTHandler {
         return nextLyrics.toString();
     }
 
-    long getNextLyricsStartTime(){
+    public long getNextLyricsStartTime(){
         int nextSRTIndex = srtIndex + 1;
         if(nextSRTIndex >= srts.size()){
             return Long.MAX_VALUE;
@@ -74,7 +75,7 @@ public class SRTHandler {
         return srts.get(nextSRTIndex).startTime.getTime() + ONEHOURINMILLIS; //Magical constant to make it work
     }
 
-    long getNextLyricsEndTime(){
+    public long getNextLyricsEndTime(){
         int nextSRTIndex = srtIndex + 1;
         if(nextSRTIndex >= srts.size()){
             return Long.MAX_VALUE;
