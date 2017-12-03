@@ -1,7 +1,6 @@
 package cz.brose;
 
 import cz.brose.lyrics.SRTHandler;
-import cz.brose.lyrics.SRTHandlerImpl;
 import cz.brose.lyrics.SimpleSRTHandler;
 import cz.brose.sound.MinimFileSystemHandler;
 import ddf.minim.AudioPlayer;
@@ -9,17 +8,17 @@ import ddf.minim.Minim;
 import ddf.minim.analysis.FFT;
 import processing.core.PApplet;
 import processing.core.PFont;
+import processing.core.PImage;
 import processing.core.PVector;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 
 /**
- * TODO package
- * TODO display text - some class hierarchy
- * TODO analyze sound - try to do it offline
- * TODO try to generate the video completely offline
+ * TODO analyze sound offline (video offline?)
  * TODO noise display (plynuly prechody mezi barvama - source and final color a prechodova barva mezi tim)
+ *
+ * TODO!
  *
  * @author Vojtech Bruza
  */
@@ -48,6 +47,7 @@ public class Main extends PApplet {
     private String inputSongName;
     //Graphics
     private GraphicArts graphicArts;
+    private PImage rose; //color source
     //Lyrics
     private String textToDisplay;
     private SRTHandler srtHandler;
@@ -66,7 +66,12 @@ public class Main extends PApplet {
         colorMode(HSB,360,100,100,100);
         background(0);
 
+        //Graphics
         graphicArts = new GraphicArts();
+        rose = loadImage("images/rose.jpeg");
+        rose.loadPixels();
+
+        //MINIM
         minim = new Minim(new MinimFileSystemHandler());
 
         //Text style
@@ -90,7 +95,7 @@ public class Main extends PApplet {
     }
 
     public void draw() {
-        clearBG(90);
+        clearBG(50);
 
         //Analyze
         float[] spectrumAmps = getSpectrum(); //be able do this offline
@@ -98,7 +103,7 @@ public class Main extends PApplet {
         graphicArts.display(spectrumAmps);
 
         //Lyrics
-        drawLyrics(100);
+//        drawLyrics(100); //SLOWS down the sketch a lot!! //TODO in different thread
 
         //Video generator
         record();
@@ -143,9 +148,9 @@ public class Main extends PApplet {
         FFT fft = new FFT(song.bufferSize(), song.sampleRate());
         fft.window(FFT.GAUSS);
         //        fft.noAverages();
-        ////        fft.logAverages(22, 10); //miBandWidth - herz nejnizzi oktavy, vysledek bude obsahovat 10x pocet oktav ruznych prumeru
+        fft.logAverages(22, 4); //miBandWidth - herz nejnizzi oktavy, vysledek bude obsahovat 10x pocet oktav ruznych prumeru
         fft.forward(song.mix);
-        float[] spectrumAmps = new float[fft.specSize()];
+        float[] spectrumAmps = new float[fft.avgSize()]; //TODO averages size vs spectrum size
         for (int i = 0; i < spectrumAmps.length; i++){
             spectrumAmps[i] = fft.getBand(i);
         }
@@ -188,40 +193,54 @@ public class Main extends PApplet {
      * To display sound amplitudes
      */
     private class GraphicArts{
-        ArrayList<Thing> things = new ArrayList<>();
-        public void display(float[] spectrumAmps){
+        ArrayList<Particle> particles = new ArrayList<>();
+        Blob blob = new Blob(center.copy(),50);
 
-//            noStroke();
-//            for (int i = 0; i < spectrumAmps.length; i++) {
-//                float amnt = map(spectrumAmps[i], 0, 6f, 0, 1);
-//                int c = lerpColor(color(300,100,100),color(200,100,100),amnt);
-////                fill(255);
-//                stroke(c);
-//                noFill();
-//                float x = map(i, 0, spectrumAmps.length,0,width/2);
-////                float xStep = width/(float)spectrumAmps.length;
-//                bezier(x, height,x-random(-20,20),height-spectrumAmps[i]*30,x+random(-20,20),height-spectrumAmps[i]*30,x,height-spectrumAmps[i]*40);
-//                bezier(width-x, height,width-x+random(-20,20),height-spectrumAmps[i]*30,width-x+random(-20,20),height-spectrumAmps[i]*30,width-x,height-spectrumAmps[i]*40);
+        public void display(float[] spectrumAmps){
+            //TODO have different graphics and switch between them
+            noStroke();
+            for (int i = 0; i < spectrumAmps.length; i++) {
+                float amnt = map(spectrumAmps[i], 0, 6f, 0, 1);
+                int c = lerpColor(color(300,100,100),color(200,100,100),amnt);
+//                fill(255);
+                stroke(c);
+                noFill();
+                float x = map(i, 0, spectrumAmps.length,0,width/2);
+//                float xStep = width/(float)spectrumAmps.length;
+                float lineHeightMult = 10;
+                bezier(x, height,x-random(-20,20),height-spectrumAmps[i]*lineHeightMult/2,x+random(-20,20),height-spectrumAmps[i]*lineHeightMult/2,x,height-spectrumAmps[i]*lineHeightMult);
+                bezier(width-x, height,width-x+random(-20,20),height-spectrumAmps[i]*lineHeightMult/2,width-x+random(-20,20),height-spectrumAmps[i]*lineHeightMult/2,width-x,height-spectrumAmps[i]*lineHeightMult);
 //                if(10 < i && i < 30 && spectrumAmps[i] > 6){
-//                    things.add(new Thing());
+//                particles.add(new Particle(new PVector(center.x, 3*height/4), 20*spectrumAmps[i]));
+
 //                }
-//            }
+            }
+
+            fill(200);
+            blob.render();
 
             noStroke();
             float level = song.mix.level();
-            fill(360,120*level);
+            fill(360);
             pushMatrix();
-            translate(center.x,center.y);
+            translate(center.x,center.y);//TODO rotation and translation?
             rotate(level);
             popMatrix();
-            for (int i = 0; i < things.size(); i++) {
-                Thing thing = things.get(i);
-                thing.update();
-                thing.display();
-                if (thing.isOut()) {
-                    things.remove(i);
+
+            for(int i = 1; i < 20*level; i++) {
+                particles.add(new Particle(new PVector(random(width), height), random(10)));
+            }
+
+            for (int i = 0; i < particles.size(); i++) {
+                Particle particle = particles.get(i);
+                particle.update();
+                particle.render();
+                if (particle.isDead()) {
+                    particles.remove(i);
                 }
             }
+
+
 
         }
     }
@@ -265,4 +284,98 @@ public class Main extends PApplet {
             return pos.x < 0 || pos.x > width || pos.y < 0 || pos.y > height;
         }
     }
+
+    class Particle { // see https://processing.org/examples/smokeparticlesystem.html
+        PVector pos;
+        PVector vel;
+        PVector acc;
+        float lifespan;
+        float size;
+        int color;
+
+        Particle(PVector pos, float size) {
+            //TODO remove acc to make the sketch run faster
+            this.size = size;
+            this.pos = pos.copy();
+
+            float vx = randomGaussian()*0.3f;
+            float vy = randomGaussian()*0.3f - 1.0f;
+            vel = new PVector(vx, vy);
+
+            acc = new PVector(0, 0);
+            lifespan = 500 + 600/size;
+
+            color = rose.pixels[(int)random(rose.pixels.length)];
+        }
+
+        void run() {
+            update();
+            render();
+        }
+
+        // Method to apply a force vector to the Particle object
+        // Note we are ignoring "mass" here
+        void applyForce(PVector f) {
+            acc.add(f);
+        }
+
+        // Method to update position
+        void update() {
+            vel.add(acc);
+            pos.add(vel);
+            lifespan -= 2.5;
+            acc.mult(0); // clear Acceleration
+        }
+
+        // Method to display
+        void render() {
+            imageMode(CENTER);
+            tint(255, lifespan);
+            fill(color,lifespan);
+            noStroke();
+            ellipse(pos.x, pos.y,size,size);
+        }
+
+        // Is the particle still useful?
+        boolean isDead() {
+            return lifespan <= 0.0;
+        }
+    }
+
+    class Wave {
+        //TODO
+    }
+
+    class Beams {
+        //TODO (neco jako jeden obrazek na zacatku videa packing circles)
+    }
+
+    class Blob {
+        PVector pos;
+        float radius;
+
+        public Blob(PVector pos, float radius) {
+            this.pos = pos;
+            this.radius = radius;
+        }
+
+        float yOff = 0;
+        public void render(){
+            pushMatrix();
+            translate(pos.x,pos.y);
+            beginShape();
+            float xOff = 0;
+            for(float angle = 0; angle < TWO_PI; angle += 0.5){
+                float r = this.radius + /*noise(xOff, yOff)**/500*song.mix.level(); //TODO correct noise (each vertex should change its value acording to the closest
+                float x = r * cos(angle);
+                float y = r * sin(angle);
+                vertex(x,y);
+                xOff+= 0.1;
+            }
+            yOff += 0.01;
+            endShape(CLOSE);
+            popMatrix();
+        }
+    }
+
 }
