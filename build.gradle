@@ -15,4 +15,5 @@ dependencies {
     compile group: 'org.processing', name: 'core', version: '3.3.6'
     // https://mvnrepository.com/artifact/net.compartmental.code/minim
     compile group: 'net.compartmental.code', name: 'minim', version: '2.2.2'
+    compile fileTree(dir: 'libs', include: '*.jar')
 }
