@@ -1,5 +1,6 @@
 package cz.brose;
 
+import cz.brose.sound.MinimFileSystemHandler;
 import ddf.minim.AudioPlayer;
 import ddf.minim.Minim;
 import ddf.minim.analysis.FFT;
@@ -7,79 +8,141 @@ import processing.core.PApplet;
 import processing.core.PFont;
 import processing.core.PVector;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Objects;
 
 /**
  * TODO package
  * TODO display text - some class hierarchy
  * TODO analyze sound - try to do it offline
  * TODO try to generate the video completely offline
- * TODO skipping when playing live
  * TODO noise display (plynuly prechody mezi barvama - source and final color a prechodova barva mezi tim)
  *
  * @author Vojtech Bruza
  */
 public class Main extends PApplet {
     public static void main(String[] args){
+        if (args.length < 1){
+            System.err.println("No song name provided. Please gimme some argument!");
+            System.exit(2);
+        }
+        if (args.length > 1){
+            System.err.println("Please gimme just ONE song name!");
+            System.exit(1);
+        } //TODO check input (file name, file content specification...)
         PApplet.main("cz.brose.Main", args);
     }
 
     public void settings(){
 //        fullScreen();
         size(1024,576); //16:9
+        inputSongName = args[0];
     }
-    PVector center;
+    private PVector center;
 
     private Minim minim;
     private AudioPlayer song;
+    private String inputSongName;
+    //Graphics
     private GraphicArts graphicArts;
+    //Lyrics
     private String textToDisplay;
-    private SRTObject srtHandler;
-    long nextLyricsMillis;
+    private SRTHandler srtHandler;
+    private long nextLyricsStartMillis;
+    private long nextLyricsEndMillis;
+    //Recording
+    private boolean recording;
+    private long recordedFrames;
+
 
     public void setup() {
         center = new PVector(width/2,height/2);
+
+        //Default style
         noStroke();
         colorMode(HSB,360,100,100,100);
         background(0);
+
         graphicArts = new GraphicArts();
         minim = new Minim(new MinimFileSystemHandler());
+
+        //Text style
         textAlign(CENTER);
         PFont font = createFont("src/main/resources/fonts/CANDY.ttf", 128);
         textFont(font);
         textToDisplay = "";
 
-        srtHandler = new SRTObject(args[0] + ".srt");
-        nextLyricsMillis = srtHandler.getNextLyricsStartTime();
-        System.out.println("FIRST MILLIS: "+nextLyricsMillis);
+        //Lyrics handling
+        srtHandler = new SRTHandler("src/main/resources/" + inputSongName + ".srt");
+        nextLyricsStartMillis = srtHandler.getNextLyricsStartTime();
 
-        song = minim.loadFile(args[0] + ".mp3"); //minim.load(songName + ".mp3", 2048); //TODO pokud nekonci na .mp3, tak pridej mp3
+        //Video settings
+        recording = false;
+        recordedFrames = 0;
+        frameRate(30);
+
+        //Song playing //TODO remove the path from loadFile
+        song = minim.loadFile("src/main/resources/" + inputSongName + ".mp3"); //minim.load(songName + ".mp3", 2048); //TODO pokud nekonci na .mp3, tak pridej mp3
         Thread songPlayer = new Thread(() -> song.play()); //play song in another thread
         songPlayer.start();
     }
+
     public void draw() {
-        fill(0,28);
-        rect(0,0,width,height);
+        clearBG(90);
 
+        //Analyze
         float[] spectrumAmps = getSpectrum(); //be able do this offline
-
+        //Draw graphics
         graphicArts.display(spectrumAmps);
 
         //Lyrics
-        pushStyle();
-//        blendMode(ADD);
-        if(song.position() >= nextLyricsMillis) { //TODO let it run in diffrent thread in case of slow down
-            textToDisplay = srtHandler.getNextLyrics(song.position());
-            nextLyricsMillis = srtHandler.getNextLyricsStartTime();
-        }
+        drawLyrics(100);
 
-        fill(20);
+        //Video generator
+        record();
+
+        diplaySongPositionBar(10);
+    }
+
+    private void record() {
+        if(recording){
+            String timeStamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new java.util.Date());
+            saveFrame("/output/"+inputSongName+"/"+timeStamp+"####.jpg");
+        }
+    }
+
+    private void diplaySongPositionBar(int barHeight) {
+        if(mouseY > height - 2*barHeight) {
+            pushStyle();
+            fill(300);
+            rect(0, height - barHeight, map(song.position(), 0, song.length(), 0, width), height);
+            popStyle();
+        }
+    }
+
+    private void drawLyrics(int fill) {
+        pushStyle();
+        if(song.position() >= nextLyricsStartMillis) { //let it run in different thread?
+            textToDisplay = srtHandler.getNextLyrics(song.position());
+            nextLyricsStartMillis = srtHandler.getNextLyricsStartTime();
+            nextLyricsEndMillis = srtHandler.getNextLyricsEndTime();
+        }
+        if(song.position() >= nextLyricsEndMillis){
+            textToDisplay = "";
+        }
+        blendMode(ADD);
+        fill(fill);
         text(textToDisplay,center.x,center.y);
         popStyle();
+    }
 
-        //TODO saveframe
-        fill(255);
-        rect(0,height-10,map(song.position(),0,song.length(),0,width),height);
+    private void clearBG(int rgbSubtract) {
+        pushStyle();
+        blendMode(SUBTRACT);
+        fill(rgbSubtract);
+        rect(0, 0, width, height);
+        popStyle();
     }
 
     private float[] getSpectrum() {
@@ -97,17 +160,11 @@ public class Main extends PApplet {
 
     @Override
     public void keyPressed() {
+        // SONG CONTROL
         if (key == '+') { //fast forward
             song.skip(12000);
         } else if (key == '-') { //backward
             song.skip(-12000);
-        } else if (key == 'r') { //rewind and play
-            if(song.isPlaying()) {
-                song.rewind();
-            } else {
-                song.rewind();
-                song.play();
-            }
         } else if (key == 's') { //stop playing
             if(song.isPlaying()) {
                 song.rewind();
@@ -116,6 +173,14 @@ public class Main extends PApplet {
         } else if(key == ' '){ //pause or play
             if(song.isPlaying()){song.pause();}
             else{song.play();}
+        }
+        // RECORDING
+        else if (key == 'r') { //toggle recording
+            recordedFrames = 0;
+            if(recording){
+                System.out.println("Recorded frames: " + recordedFrames);
+            }
+            recording = !recording;
         }
     }
 
@@ -131,21 +196,22 @@ public class Main extends PApplet {
     private class GraphicArts{
         ArrayList<Thing> things = new ArrayList<>();
         public void display(float[] spectrumAmps){
+
 //            noStroke();
-            for (int i = 0; i < spectrumAmps.length; i++) {
-                float amnt = map(spectrumAmps[i], 0, 6f, 0, 1);
-                int c = lerpColor(color(300,100,100),color(200,100,100),amnt);
-//                fill(255);
-                stroke(c);
-                noFill();
-                float x = map(i, 0, spectrumAmps.length,0,width/2);
-//                float xStep = width/(float)spectrumAmps.length;
-                bezier(x, height,x-random(-20,20),height-spectrumAmps[i]*30,x+random(-20,20),height-spectrumAmps[i]*30,x,height-spectrumAmps[i]*40);
-                bezier(width-x, height,width-x+random(-20,20),height-spectrumAmps[i]*30,width-x+random(-20,20),height-spectrumAmps[i]*30,width-x,height-spectrumAmps[i]*40);
-                if(10 < i && i < 30 && spectrumAmps[i] > 6){
-                    things.add(new Thing());
-                }
-            }
+//            for (int i = 0; i < spectrumAmps.length; i++) {
+//                float amnt = map(spectrumAmps[i], 0, 6f, 0, 1);
+//                int c = lerpColor(color(300,100,100),color(200,100,100),amnt);
+////                fill(255);
+//                stroke(c);
+//                noFill();
+//                float x = map(i, 0, spectrumAmps.length,0,width/2);
+////                float xStep = width/(float)spectrumAmps.length;
+//                bezier(x, height,x-random(-20,20),height-spectrumAmps[i]*30,x+random(-20,20),height-spectrumAmps[i]*30,x,height-spectrumAmps[i]*40);
+//                bezier(width-x, height,width-x+random(-20,20),height-spectrumAmps[i]*30,width-x+random(-20,20),height-spectrumAmps[i]*30,width-x,height-spectrumAmps[i]*40);
+//                if(10 < i && i < 30 && spectrumAmps[i] > 6){
+//                    things.add(new Thing());
+//                }
+//            }
 
             noStroke();
             float level = song.mix.level();

@@ -1,4 +1,4 @@
-package cz.brose;
+package cz.brose.sound;
 
 import ddf.minim.spi.MinimServiceProvider;
 

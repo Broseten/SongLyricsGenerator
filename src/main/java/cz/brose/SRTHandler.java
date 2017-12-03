@@ -11,12 +11,11 @@ import java.util.ArrayList;
 /**
  * @author Vojtech Bruza
  */
-//TODO implements runnable - bude to samo modifikovat promennou ktera bude obsahovat text
-public class SRTObject {
+public class SRTHandler {
     ArrayList<SRT> srts;
     private int srtIndex;
 
-    SRTObject(String srtFileName) {
+    SRTHandler(String srtFileName) {
         SRTInfo inputSRT;
         try {
             inputSRT = SRTReader.read(new File(srtFileName));
@@ -56,7 +55,7 @@ public class SRTObject {
                 }
             }
             for (String line : actualSRT.text) {
-                nextLyrics.append(line);
+                nextLyrics.append(line + "\n");
             }
             System.out.println("NEXT LYRICS START: " + getNextLyricsStartTime());
             System.out.println("NEXT LYRICS END: " + getNextLyricsEndTime());
@@ -81,5 +80,15 @@ public class SRTObject {
             return Long.MAX_VALUE;
         }
         return srts.get(nextSRTIndex).endTime.getTime() + ONEHOURINMILLIS;
+    }
+
+    //TODO be able to save lyrics when I click - rather in a different class
+    public void writeNext(){ //called on clicking some button
+        //load next lyrics from a text file
+
+        //show next lyrics
+
+        //click to create new record
+
     }
 }
