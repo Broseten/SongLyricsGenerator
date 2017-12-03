@@ -38,7 +38,7 @@ public class OnlineAudioAnalyser implements AudioAnalyser {
 //            // save internally
 //        }
         for(int i = 0; song.position() < songLength; i++){
-//            song.skip(millisecondsBetweenSamples); //TODO use cue
+//            song.skip(millisecondsBetweenSamples); //TODO use cue - you can use it to offline analysis
             FFT fft = new FFT(song.bufferSize(), song.sampleRate());
             fft.window(FFT.GAUSS);
             //        fft.noAverages();

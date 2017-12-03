@@ -7,10 +7,7 @@ import cz.brose.sound.MinimFileSystemHandler;
 import ddf.minim.AudioPlayer;
 import ddf.minim.Minim;
 import ddf.minim.analysis.FFT;
-import processing.core.PApplet;
-import processing.core.PFont;
-import processing.core.PImage;
-import processing.core.PVector;
+import processing.core.*;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -44,9 +41,11 @@ public class Main extends PApplet {
     }
     private PVector center;
 
+    //Song
     private Minim minim;
     private AudioPlayer song;
     private String inputSongName;
+    private final float songPositionBarHeight = 10;
     //Graphics
     private GraphicArts graphicArts;
     private PImage rose; //color source
@@ -111,29 +110,32 @@ public class Main extends PApplet {
         //Draw graphics
         graphicArts.display(spectrumAmps);
 
-        //Lyrics
+        //Lyrics //TODO correct text blending and appearing
         drawLyrics(100); //SLOWS down the sketch a lot!! //TODO in different thread
 
         //Video generator
         record();
 
-        diplaySongPositionBar(10);
+        diplaySongPositionBar(songPositionBarHeight);
     }
 
-    private void diplayRecordingIndic() {
+    private void displayRecordingIndic() {
+        pushStyle();
         fill(255,0,0);
-        ellipse(10,height-10,10,10);
+        ellipse(10,height-10,30,30);
+        popStyle();
     }
 
     private void record() {
         if(recording){
             String timeStamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new java.util.Date());
             saveFrame("/output/"+inputSongName+"/"+timeStamp+"####.jpg");
+            recordedFrames++;
+            displayRecordingIndic();
         }
-        diplayRecordingIndic();
     }
 
-    private void diplaySongPositionBar(int barHeight) {
+    private void diplaySongPositionBar(float barHeight) {
         if(mouseY > height - 2*barHeight) {
             pushStyle();
             fill(300);
@@ -143,12 +145,17 @@ public class Main extends PApplet {
     }
 
     private void drawLyrics(int fill) {
+        pushMatrix();
         pushStyle();
         textToDisplay = srtHandler.getNextLyrics(song.position());
         blendMode(ADD);
         fill(fill);
-        text(textToDisplay,center.x,center.y);
+        if(textWidth(textToDisplay) > width){
+            rotate(PI/4);
+        }
+        text(textToDisplay,center.x,center.y-50);
         popStyle();
+        popMatrix();
     }
 
     private void clearBG(int rgbSubtract) {
@@ -163,13 +170,20 @@ public class Main extends PApplet {
         FFT fft = new FFT(song.bufferSize(), song.sampleRate());
         fft.window(FFT.GAUSS);
         //        fft.noAverages();
-        fft.logAverages(22, 4); //miBandWidth - herz nejnizzi oktavy, vysledek bude obsahovat 10x pocet oktav ruznych prumeru
+        fft.logAverages(22, 6); //miBandWidth - herz nejnizzi oktavy, vysledek bude obsahovat 10x pocet oktav ruznych prumeru
         fft.forward(song.mix);
         float[] spectrumAmps = new float[fft.avgSize()]; //TODO averages size vs spectrum size
         for (int i = 0; i < spectrumAmps.length; i++){
             spectrumAmps[i] = fft.getBand(i);
         }
         return spectrumAmps;
+    }
+
+    @Override
+    public void mousePressed() {
+        if(mouseY > height - 2 * songPositionBarHeight){ //setSong position
+            song.cue((int) map(mouseX,0, width, 0, song.length()));
+        }
     }
 
     @Override
@@ -190,9 +204,11 @@ public class Main extends PApplet {
         }
         // RECORDING
         else if (key == 'r') { //toggle recording
-            recordedFrames = 0;
             if(recording){
                 System.out.println("Recorded frames: " + recordedFrames);
+            } else {
+                System.out.println("Recording started...");
+                recordedFrames = 0;
             }
             recording = !recording;
         }
@@ -219,10 +235,19 @@ public class Main extends PApplet {
     private class GraphicArts{
         ArrayList<Particle> particles = new ArrayList<>();
         Blob blob = new Blob(center.copy(),50);
+        Wave[] waves = new Wave[4];
 
         public void display(float[] spectrumAmps){
-            //TODO have different graphics and switch between them
-            noStroke();
+            //TODO switching between graphics
+
+            waves[0] = new Wave(center.x,center.y,width/2,8,spectrumAmps);
+            waves[1] = new Wave(center.x,center.y,width/2,-8,spectrumAmps);
+            waves[2] = new Wave(center.x,center.y,-width/2,8,spectrumAmps);
+            waves[3] = new Wave(center.x,center.y,-width/2,-8,spectrumAmps);
+            fill(360);
+            for (int i = 0; i < waves.length; i++) {
+                waves[i].render();
+            }
             for (int i = 0; i < spectrumAmps.length; i++) {
                 float amnt = map(spectrumAmps[i], 0, 6f, 0, 1);
                 int c = lerpColor(color(300,100,100),color(200,100,100),amnt);
@@ -230,17 +255,17 @@ public class Main extends PApplet {
                 stroke(c);
                 noFill();
                 float x = map(i, 0, spectrumAmps.length,0,width/2);
-//                float xStep = width/(float)spectrumAmps.length;
+//                float xStep = w/(float)spectrumAmps.length;
                 float lineHeightMult = 10;
                 bezier(x, height,x-random(-20,20),height-spectrumAmps[i]*lineHeightMult/2,x+random(-20,20),height-spectrumAmps[i]*lineHeightMult/2,x,height-spectrumAmps[i]*lineHeightMult);
                 bezier(width-x, height,width-x+random(-20,20),height-spectrumAmps[i]*lineHeightMult/2,width-x+random(-20,20),height-spectrumAmps[i]*lineHeightMult/2,width-x,height-spectrumAmps[i]*lineHeightMult);
 //                if(10 < i && i < 30 && spectrumAmps[i] > 6){
-//                particles.add(new Particle(new PVector(center.x, 3*height/4), 20*spectrumAmps[i]));
+//                particles.add(new Particle(new PVector(center.x, 3*h/4), 20*spectrumAmps[i]));
 
 //                }
             }
 
-            fill(200);
+            fill(0,50);
             blob.render();
 
             noStroke();
@@ -263,9 +288,6 @@ public class Main extends PApplet {
                     particles.remove(i);
                 }
             }
-
-
-
         }
     }
 
@@ -366,8 +388,39 @@ public class Main extends PApplet {
         }
     }
 
-    class Wave {
-        //TODO
+    class Wave {//TODO remake to function - you dont have to initialize it everyTime
+        //TODO viz nas plakatek
+        float x, y;
+        float w, h;
+
+        float[] amps;
+
+        public Wave(float x, float y, float w, float h, float[] amps) {
+            this.x = x;
+            this.y = y;
+            this.w = w;
+            this.h = h;
+            this.amps = amps.clone();
+            if (h < 0) {
+                for (int i = 0; i < amps.length; i++) {
+                    this.amps[i] *= (-1); //revert the amplitude if the wave is upside down
+                }
+            }
+        }
+
+        void render(){
+            beginShape();
+            vertex(x, y);
+            vertex(x,y + h + amps[0]);
+            curveVertex(x,y + h + amps[0]);
+            for (int i = 0; i < amps.length; i++) {
+                float xi = map(i,0,amps.length-1,x,x + w);
+                curveVertex(xi,y + h + amps[i]);
+            }
+            curveVertex(x + w,y + h + amps[amps.length-1]);
+            vertex(x + w, y);
+            endShape(CLOSE);
+        }
     }
 
     class Beams {
@@ -437,15 +490,15 @@ public class Main extends PApplet {
 //            //TODO back to previous position
 //            x += vx;
 //            y += vy;
-//            if (x + diameter / 2 > width) {
-//                x = width - diameter / 2;
+//            if (x + diameter / 2 > w) {
+//                x = w - diameter / 2;
 //                vx *= friction;
 //            } else if (x - diameter / 2 < 0) {
 //                x = diameter / 2;
 //                vx *= friction;
 //            }
-//            if (y + diameter / 2 > height) {
-//                y = height - diameter / 2;
+//            if (y + diameter / 2 > h) {
+//                y = h - diameter / 2;
 //                vy *= friction;
 //            } else if (y - diameter / 2 < 0) {
 //                y = diameter / 2;
