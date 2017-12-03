@@ -1,25 +1,97 @@
 package cz.brose.sound;
 
+import ddf.minim.AudioPlayer;
+import ddf.minim.Minim;
+import ddf.minim.analysis.FFT;
+
 /**
  * Class to store song analysis data.
+ * Always sampling 60fps(this means that you have 60 sampling values per second)
  * @author Vojtech Bruza
  */
 public class AudioAnalyserImpl implements AudioAnalyser {
     //TODO save to file and load file
-    //TODO use logarithmic dist (protoze ve vyskach nejsou tak velky hodnoty jako v basech)
+    //TODO each channel separately
+    //use logarithmic dist? (protoze ve vyskach neni tolik ruznych hodnot jako v basech)
     //FFT mi rozlozi hodnotu v jednom case na hodnoty spektra v tom case
-    //TODO save fft spectrum for each frame
+    //save fft spectrum for each frame
 
-    /**
-     *
-     * @param songName
-     * @param numberOfFrequencyBands
-     */
-    AudioAnalyserImpl(String songName, int numberOfFrequencyBands){
-        //TODO analyze song and save data (save it also to file to be able to load it after)
+    int numberOfFrequencyBands;
+    int songLength; //can be -1 when length could not be determined
+    float[][] spectrumAmps;
+
+    //javadoc
+    public AudioAnalyserImpl(Minim minim, AudioPlayer song, int numberOfFrequencyBands){
+        //TODO how to know the number of samples
+        this.numberOfFrequencyBands = numberOfFrequencyBands;
+        //TODO handle -1 song length
+        this.songLength = song.length(); //is there a different way to find out?
+//        spectrumAmps = new int[numberOfSamples][];
+        analyze(minim,song);
     }
 
+    private void analyze(Minim minim, AudioPlayer song){
+//        for/*eachFrame*{
+//            // analyze
+//            // save internally
+//        }
+        for(int i = 0; song.position() < songLength; i++){
+//            song.skip(millisecondsBetweenSamples); //TODO use cue
+            FFT fft = new FFT(song.bufferSize(), song.sampleRate());
+            fft.window(FFT.GAUSS);
+            //        fft.noAverages();
+            ////        fft.logAverages(22, 10); //miBandWidth - herz nejnizzi oktavy, vysledek bude obsahovat 10x pocet oktav ruznych prumeru
+            fft.forward(song.mix);
+            spectrumAmps[i] = new float[fft.specSize()];
+            for(int j = 0; j < fft.specSize(); j++) {
+//                 = fft.getBand(j);
+            }
+        }
 
+//        fft.window(FFT.GAUSS);
+
+//        float[] leftChannel = song.getChannel(AudioSample.LEFT);
+//
+//        int fftSize = 1024;
+//        float[] fftSamples = new float[fftSize];
+//        FFT fft = new FFT( fftSize, song.sampleRate() );
+//
+//        int totalChunks = (leftChannel.length / fftSize) + 1;
+//
+//        spectra = new float[totalChunks][fftSize/2];
+//
+//        for(int chunkIdx = 0; chunkIdx < totalChunks; ++chunkIdx)
+//        {
+//            int chunkStartIndex = chunkIdx * fftSize;
+//            int chunkSize = min( leftChannel.length - chunkStartIndex, fftSize );
+//
+//            // copy first chunk into our analysis array
+//            for (int i = 0; i < chunkSize; i++){
+//                fftSamples[i] = leftChannel[chunkStartIndex+i];
+//            }
+//
+//            if ( chunkSize < fftSize ){
+//                // we use a system call for this
+//                Arrays.fill( fftSamples, chunkSize, fftSamples.length - 1, 0.0);
+//            }
+//
+//            // now analyze this buffer
+//            fft.forward( fftSamples );
+//
+//            // and copy the resulting spectrum into our spectra array
+//            for(int i = 0; i < 512; ++i){
+//                spectra[chunkIdx][i] = fft.getBand(i);
+//            }
+//        }
+//        song.close();
+    }
+
+    public void saveToFile(){
+        //TODO
+    }
+    public void loadFromFile(){
+        //TODO
+    }
 
     public float[] getSpectrum(int frameCount){
         //TODO
