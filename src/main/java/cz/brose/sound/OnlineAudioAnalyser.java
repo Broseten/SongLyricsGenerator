@@ -9,7 +9,7 @@ import ddf.minim.analysis.FFT;
  * Always sampling 60fps(this means that you have 60 sampling values per second)
  * @author Vojtech Bruza
  */
-public class AudioAnalyserImpl implements AudioAnalyser {
+public class OnlineAudioAnalyser implements AudioAnalyser {
     //TODO save to file and load file
     //TODO each channel separately
     //use logarithmic dist? (protoze ve vyskach neni tolik ruznych hodnot jako v basech)
@@ -19,18 +19,20 @@ public class AudioAnalyserImpl implements AudioAnalyser {
     int numberOfFrequencyBands;
     int songLength; //can be -1 when length could not be determined
     float[][] spectrumAmps;
+    AudioPlayer song;
 
     //javadoc
-    public AudioAnalyserImpl(Minim minim, AudioPlayer song, int numberOfFrequencyBands){
-        //TODO how to know the number of samples
+    public OnlineAudioAnalyser(Minim minim, AudioPlayer song, int numberOfFrequencyBands){
+        this.song = song;
         this.numberOfFrequencyBands = numberOfFrequencyBands;
-        //TODO handle -1 song length
+        //TODO handle -1 song length if the length is unknown
         this.songLength = song.length(); //is there a different way to find out?
 //        spectrumAmps = new int[numberOfSamples][];
         analyze(minim,song);
     }
 
     private void analyze(Minim minim, AudioPlayer song){
+//        song.play();
 //        for/*eachFrame*{
 //            // analyze
 //            // save internally

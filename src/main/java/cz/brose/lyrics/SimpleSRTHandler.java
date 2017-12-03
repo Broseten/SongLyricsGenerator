@@ -1,11 +1,9 @@
  package cz.brose.lyrics;
 
-import org.fredy.jsrt.api.SRT;
-import org.fredy.jsrt.api.SRTInfo;
-import org.fredy.jsrt.api.SRTReader;
-import org.fredy.jsrt.api.SRTReaderException;
+import org.fredy.jsrt.api.*;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 
@@ -16,7 +14,7 @@ public class SimpleSRTHandler implements SRTHandler {
     ArrayList<SRT> srts;
     private int expectedSrtIndex; //next expected srt index
 
-    public SimpleSRTHandler(String srtFileName) {
+    public SimpleSRTHandler(String srtFileName) throws IOException {
         SRTInfo inputSRT;
         try {
             inputSRT = SRTReader.read(new File(srtFileName));
@@ -26,12 +24,9 @@ public class SimpleSRTHandler implements SRTHandler {
             }
             expectedSrtIndex = 0;
         } catch (SRTReaderException e) {
-            System.err.println("Check this file, not able to read it: " + srtFileName);
-            System.exit(1);
+            throw new IOException("Could not read");
         }
     }
-
-    final long ONEHOURINMILLIS = 3600000;
 
     public String getNextLyrics(long millis){
         String text = "";
@@ -48,15 +43,5 @@ public class SimpleSRTHandler implements SRTHandler {
             }
         }
         return text;
-    }
-
-    //TODO be able to save lyrics when I click - rather in a different class
-    public void writeNext(){ //called on clicking some button
-        //load next lyrics from a text file
-
-        //show next lyrics
-
-        //click to create new record
-
     }
 }

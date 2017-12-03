@@ -1,6 +1,7 @@
 package cz.brose;
 
 import cz.brose.lyrics.SRTHandler;
+import cz.brose.lyrics.SRTWriterWrapper;
 import cz.brose.lyrics.SimpleSRTHandler;
 import cz.brose.sound.MinimFileSystemHandler;
 import ddf.minim.AudioPlayer;
@@ -11,6 +12,7 @@ import processing.core.PFont;
 import processing.core.PImage;
 import processing.core.PVector;
 
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 
@@ -25,11 +27,11 @@ import java.util.ArrayList;
 public class Main extends PApplet {
     public static void main(String[] args){
         if (args.length < 1){
-            System.err.println("No song name provided. Please gimme some argument!");
+            System.err.println("Please, give me some argument!");
             System.exit(2);
         }
         if (args.length > 1){
-            System.err.println("Please gimme just ONE song name!");
+            System.err.println("Please, give just ONE argument!");
             System.exit(1);
         } //TODO check input (file name, file content specification...)
         PApplet.main("cz.brose.Main", args);
@@ -51,8 +53,7 @@ public class Main extends PApplet {
     //Lyrics
     private String textToDisplay;
     private SRTHandler srtHandler;
-    private long nextLyricsStartMillis;
-    private long nextLyricsEndMillis;
+    private boolean srtCreatorMode;
     //Recording
     private boolean recording;
     private long recordedFrames;
@@ -76,12 +77,19 @@ public class Main extends PApplet {
 
         //Text style
         textAlign(CENTER);
-        PFont font = createFont("src/main/resources/fonts/CANDY.ttf", 128);
+        PFont font = createFont("src/main/resources/fonts/attack of the cucumbers.ttf", 32);
         textFont(font);
-        textToDisplay = "";
 
-        //Lyrics handling
-        srtHandler = new SimpleSRTHandler("src/main/resources/" + inputSongName + ".srt");
+        //Lyrics handling (reading srt, or txt - press 'w' to write lyrics)
+        try {
+            srtHandler = new SimpleSRTHandler("src/main/resources/" + inputSongName + ".srt");
+            srtCreatorMode = false; //lyrics found
+            textToDisplay = "";
+        } catch (IOException e) {
+            srtCreatorMode = true;
+            srtHandler = new SRTWriterWrapper("src/main/resources/" + inputSongName + ".txt");
+            textToDisplay = srtHandler.getNextLyrics(0);
+        }
 
         //Video settings
         recording = false;
@@ -89,7 +97,8 @@ public class Main extends PApplet {
         frameRate(30);
 
         //Song playing //TODO remove the path from loadFile
-        song = minim.loadFile("src/main/resources/" + inputSongName + ".mp3"); //minim.load(songName + ".mp3", 2048); //TODO pokud nekonci na .mp3, tak pridej mp3
+        song = minim.loadFile("src/main/resources/" + inputSongName + ".mp3"); //minim.load(songName + ".mp3", 2048);
+        // TODO pokud nekonci na .mp3, tak pridej mp3
         Thread songPlayer = new Thread(() -> song.play()); //play song in another thread
         songPlayer.start();
     }
@@ -103,7 +112,7 @@ public class Main extends PApplet {
         graphicArts.display(spectrumAmps);
 
         //Lyrics
-//        drawLyrics(100); //SLOWS down the sketch a lot!! //TODO in different thread
+        drawLyrics(100); //SLOWS down the sketch a lot!! //TODO in different thread
 
         //Video generator
         record();
@@ -111,11 +120,17 @@ public class Main extends PApplet {
         diplaySongPositionBar(10);
     }
 
+    private void diplayRecordingIndic() {
+        fill(255,0,0);
+        ellipse(10,height-10,10,10);
+    }
+
     private void record() {
         if(recording){
             String timeStamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new java.util.Date());
             saveFrame("/output/"+inputSongName+"/"+timeStamp+"####.jpg");
         }
+        diplayRecordingIndic();
     }
 
     private void diplaySongPositionBar(int barHeight) {
@@ -181,10 +196,19 @@ public class Main extends PApplet {
             }
             recording = !recording;
         }
+        //WRITING LYRICS
+        else if (key == 'w'){
+            if(srtCreatorMode) {
+                ((SRTWriterWrapper) srtHandler).writeNext(song.position(), song.position() + 2000); //end after half a second
+            }
+        }
     }
 
     @Override
     public void dispose(){
+        if(srtCreatorMode){
+            ((SRTWriterWrapper) srtHandler).saveFile();
+        }
         song.close();
         minim.stop();
     }
@@ -338,7 +362,7 @@ public class Main extends PApplet {
 
         // Is the particle still useful?
         boolean isDead() {
-            return lifespan <= 0.0;
+            return lifespan <= 0;
         }
     }
 
@@ -377,5 +401,61 @@ public class Main extends PApplet {
             popMatrix();
         }
     }
+
+//    class Ball { //TODO something like this in 2D: https://www.youtube.com/watch?v=mEp_CtJHF0c
+//
+//        PVector pos;
+//        float diameter;
+//
+//        int id;
+//
+//        Ball(PVector pos, float din) {
+//            diameter = din;
+//        }
+//
+//        void collide() {
+//            for (int i = id + 1; i < numBalls; i++) {
+//                float dx = others[i].x - x;
+//                float dy = others[i].y - y;
+//                float distance = sqrt(dx * dx + dy * dy);
+//                float minDist = others[i].diameter / 2 + diameter / 2;
+//                if (distance < minDist) {
+//                    float angle = atan2(dy, dx);
+//                    float targetX = x + cos(angle) * minDist;
+//                    float targetY = y + sin(angle) * minDist;
+//                    float ax = (targetX - others[i].x) * spring;
+//                    float ay = (targetY - others[i].y) * spring;
+//                    vx -= ax;
+//                    vy -= ay;
+//                    others[i].vx += ax;
+//                    others[i].vy += ay;
+//                }
+//            }
+//        }
+//
+//        void move() {
+//            //TODO back to previous position
+//            x += vx;
+//            y += vy;
+//            if (x + diameter / 2 > width) {
+//                x = width - diameter / 2;
+//                vx *= friction;
+//            } else if (x - diameter / 2 < 0) {
+//                x = diameter / 2;
+//                vx *= friction;
+//            }
+//            if (y + diameter / 2 > height) {
+//                y = height - diameter / 2;
+//                vy *= friction;
+//            } else if (y - diameter / 2 < 0) {
+//                y = diameter / 2;
+//                vy *= friction;
+//            }
+//        }
+//
+//        void display() {
+//            ellipse(x, y, diameter, diameter);
+//        }
+//    }
 
 }
