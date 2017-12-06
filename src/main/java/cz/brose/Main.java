@@ -7,9 +7,13 @@ import cz.brose.sound.MinimFileSystemHandler;
 import ddf.minim.AudioPlayer;
 import ddf.minim.Minim;
 import ddf.minim.analysis.FFT;
+import org.apache.commons.io.FilenameUtils;
 import processing.core.*;
 
+import javax.swing.*;
+import java.awt.*;
 import java.io.IOException;
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 
@@ -17,42 +21,136 @@ import java.util.ArrayList;
  * TODO analyze sound offline (video offline?)
  * TODO noise display (plynuly prechody mezi barvama - source and final color a prechodova barva mezi tim)
  *
- * TODO!
+ * TODO before jar build - fix file paths
  *
  * @author Vojtech Bruza
  */
 public class Main extends PApplet {
     public static void main(String[] args){
-        if (args.length < 1){
-            System.err.println("Please, give me some argument!");
-            System.exit(2);
-        }
-        if (args.length > 1){
-            System.err.println("Please, give just ONE argument!");
-            System.exit(1);
-        } //TODO check input (file name, file content specification...)
         PApplet.main("cz.brose.Main", args);
     }
 
     public void settings(){
 //        fullScreen();
-        size(1024,576); //16:9
-        inputSongName = args[0];
+        size(1920,1080); //16:9
+        //MINIM
+        minim = new Minim(new MinimFileSystemHandler());
+
+        try {
+            //Select folder with: song, srt, font, color source, (background and mask image):
+            JFileChooser chooser = new JFileChooser();
+            chooser.setCurrentDirectory(new java.io.File("."));
+            chooser.setDialogTitle("Select folder with song files:");
+            chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+            // disable the "All files" option.
+            chooser.setAcceptAllFileFilterUsed(false);
+            if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
+                folderSelected(chooser.getSelectedFile());
+            }
+            else {
+                System.err.println("No working directory selected.");
+                System.exit(1);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.exit(1);
+        }
     }
+    //called when the user folder is selected
+    void folderSelected(File selection) {
+        if (selection == null) {
+            System.err.println("Was not able to open input folder");
+            exit();
+        } else {
+            println("Selected folder: " + selection.getName());
+            inputFolder = selection.getAbsolutePath();
+            File[] folderFiles = selection.listFiles();
+            boolean srtFound = false;
+            for (File folderFile : folderFiles) {
+                String ext = FilenameUtils.getExtension(folderFile.getName());
+                switch (ext) {
+                    case "mp3": //song
+                        if(song == null){
+                            song = minim.loadFile(folderFile.getAbsolutePath());
+                        } else {
+                            System.err.println("Just one mp3 file is supported");
+                        }
+                        break;
+                    case "png": case "jpeg": case "jpg": ///TODO doc accepted formats
+                        if(folderFile.getName().contains("background")){
+                            if (backgroundImage == null) {
+                                backgroundImage = loadImage(folderFile.getAbsolutePath());
+                            }
+                        } else if(folderFile.getName().contains("mask")){
+                            if (maskImage == null) { //TODO loading more of them and be able to cycle through it
+                                maskImage = loadImage(folderFile.getAbsolutePath());
+                            }
+                        } else if (srcImage == null) { //load any other default image as color source image
+                            srcImage = loadImage(folderFile.getAbsolutePath());
+                        }
+                        break;
+                    case "srt":
+                        srtFound = true;
+                        try {
+                            srtHandler = new SimpleSRTHandler(folderFile.getAbsolutePath());
+                            textToDisplay = "";
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            System.err.println("Error loading srt file");
+                        }
+                        break;
+                    case "txt": // in lyrics creator mode you can press "w" to write lyrics
+                        if(srtHandler == null) {
+                            srtHandler = new SRTWriterWrapper(folderFile.getAbsolutePath());
+                            textToDisplay = srtHandler.getNextLyrics(0);
+                        }
+                        break;
+                    case "ttf": //font
+                        //TODO load font size from its name (min size 32) - writ it to DOCUMENTATION - https://fontlibrary.org/
+                        int fontSize = Integer.parseInt(folderFile.getName().replaceAll("[\\D]", ""));
+                        font = createFont(folderFile.getAbsolutePath(), fontSize > 32 ? fontSize : 32);
+                        break;
+                    default:
+                }
+            }
+            if(!srtFound && srtHandler != null) srtCreatorMode = true; //if no srt file found - use text file to create srt
+            if(srcImage == null){
+                System.err.println("Folder must contain color source image");
+                exit();
+                //TODO load default
+                System.out.println("User specified color source image must contain \"color\" in file name");
+            }
+            if(backgroundImage == null){
+                //TODO load default
+                System.out.println("No bg specified. User specified background image must contain \"background\" in file name");
+            }
+            if(maskImage == null){
+                //TODO load default
+                System.out.println("User specified mask image must contain \"mask\" in file name");
+            }
+            if(font == null){
+                System.out.println("No font specified, using default...");
+            }
+        }
+    }
+
     private PVector center;
 
+    private String inputFolder;
     //Song
     private Minim minim;
     private AudioPlayer song;
-    private String inputSongName;
     private final float songPositionBarHeight = 10;
     //Graphics
     private GraphicArts graphicArts;
-    private PImage rose; //color source
+    private PImage srcImage; //color source
+    private PImage backgroundImage; //color source
+    private PImage maskImage; //color source
     //Lyrics
     private String textToDisplay;
     private SRTHandler srtHandler;
     private boolean srtCreatorMode;
+    PFont font;
     //Recording
     private boolean recording;
     private long recordedFrames;
@@ -68,26 +166,17 @@ public class Main extends PApplet {
 
         //Graphics
         graphicArts = new GraphicArts();
-        rose = loadImage("images/rose.jpeg");
-        rose.loadPixels();
-
-        //MINIM
-        minim = new Minim(new MinimFileSystemHandler());
+        srcImage.loadPixels();
+        if (maskImage != null) {
+            processMask();
+        }
 
         //Text style
         textAlign(CENTER);
-        PFont font = createFont("src/main/resources/fonts/attack of the cucumbers.ttf", 32);
-        textFont(font);
-
-        //Lyrics handling (reading srt, or txt - press 'w' to write lyrics)
-        try {
-            srtHandler = new SimpleSRTHandler("src/main/resources/" + inputSongName + ".srt");
-            srtCreatorMode = false; //lyrics found
-            textToDisplay = "";
-        } catch (IOException e) {
-            srtCreatorMode = true;
-            srtHandler = new SRTWriterWrapper("src/main/resources/" + inputSongName + ".txt");
-            textToDisplay = srtHandler.getNextLyrics(0);
+        if(font == null){
+            textSize(64); // only when no font is specified
+        } else {
+            textFont(font); // size is set by the font itself
         }
 
         //Video settings
@@ -95,10 +184,8 @@ public class Main extends PApplet {
         recordedFrames = 0;
         frameRate(30);
 
-        //Song playing //TODO remove the path from loadFile
-        song = minim.loadFile("src/main/resources/" + inputSongName + ".mp3"); //minim.load(songName + ".mp3", 2048);
-        // TODO pokud nekonci na .mp3, tak pridej mp3
-        Thread songPlayer = new Thread(() -> song.play()); //play song in another thread
+        //Song playing
+        Thread songPlayer = new Thread(() -> song.play()); //TODO play song in another thread
         songPlayer.start();
     }
 
@@ -113,6 +200,9 @@ public class Main extends PApplet {
         //Lyrics //TODO correct text blending and appearing
         drawLyrics(100); //SLOWS down the sketch a lot!! //TODO in different thread
 
+        //Mask
+//        image(maskImage,0,0);
+
         //Video generator
         record();
 
@@ -121,15 +211,30 @@ public class Main extends PApplet {
 
     private void displayRecordingIndic() {
         pushStyle();
-        fill(255,0,0);
+        blendMode(BLEND);
+        fill(360,0,0);
         ellipse(10,height-10,30,30);
         popStyle();
+    }
+
+    /**
+     * Processes alpha channel of the image mask (white to transparent, black nontransparent)
+     */
+    private void processMask(){
+        maskImage.loadPixels();
+        for (int i = 0; i < maskImage.width; i++){
+            for(int j = 0; j < maskImage.height; j++){
+                int col = maskImage.pixels[i + width*j];
+                maskImage.pixels[i + width*j] = color(0,360-brightness(color(col)));
+            }
+        }
+        maskImage.updatePixels();
     }
 
     private void record() {
         if(recording){
             String timeStamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new java.util.Date());
-            saveFrame("/output/"+inputSongName+"/"+timeStamp+"####.jpg");
+            saveFrame(inputFolder + "/output/"+timeStamp+"####.jpg");
             recordedFrames++;
             displayRecordingIndic();
         }
@@ -150,10 +255,16 @@ public class Main extends PApplet {
         textToDisplay = srtHandler.getNextLyrics(song.position());
         blendMode(ADD);
         fill(fill);
-        if(textWidth(textToDisplay) > width){
-            rotate(PI/4);
+        translate(center.x,center.y);
+        if(textWidth(textToDisplay) > width){ //if the text does not fit the screen size, make it two rows long
+            for (int i = textToDisplay.length()/2; i < textToDisplay.length(); i++){
+                if (textToDisplay.charAt(i) == ' '){ //replace first space after the mid with end of line
+                    textToDisplay = textToDisplay.substring(0,i) + "\n" + textToDisplay.substring(i+1);
+                    break;
+                }
+            }
         }
-        text(textToDisplay,center.x,center.y-50);
+        text(textToDisplay,0,-50);
         popStyle();
         popMatrix();
     }
@@ -251,7 +362,7 @@ public class Main extends PApplet {
             for (int i = 0; i < spectrumAmps.length; i++) {
                 float amnt = map(spectrumAmps[i], 0, 6f, 0, 1);
                 int c = lerpColor(color(300,100,100),color(200,100,100),amnt);
-//                fill(255);
+//                fill(360);
                 stroke(c);
                 noFill();
                 float x = map(i, 0, spectrumAmps.length,0,width/2);
@@ -351,7 +462,7 @@ public class Main extends PApplet {
             acc = new PVector(0, 0);
             lifespan = 500 + 600/size;
 
-            color = rose.pixels[(int)random(rose.pixels.length)];
+            color = srcImage.pixels[(int)random(srcImage.pixels.length)];
         }
 
         void run() {
