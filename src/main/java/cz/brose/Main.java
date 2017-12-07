@@ -11,11 +11,13 @@ import org.apache.commons.io.FilenameUtils;
 import processing.core.*;
 
 import javax.swing.*;
-import java.awt.*;
 import java.io.IOException;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * TODO analyze sound offline (video offline?)
@@ -32,7 +34,7 @@ public class Main extends PApplet {
     public void settings(){
 //        fullScreen();
 //        size(1024,576); //16:9
-        size(1920,1080);
+        size(1280,720);
         //MINIM
         minim = new Minim(new MinimFileSystemHandler());
 
@@ -168,8 +170,7 @@ public class Main extends PApplet {
         //Graphics
         graphicArts = new GraphicArts();
         srcImage.loadPixels();
-        satureColor = srcImage.pixels[(int)random(srcImage.pixels.length-1)]; //TODO finding saturated color
-        notSatureColor = srcImage.pixels[(int)random(srcImage.pixels.length-1)]; //TODO finding not sature color
+        setColors();
         if (maskImage != null) {
             processMask();
         }
@@ -177,7 +178,7 @@ public class Main extends PApplet {
         //Text style
         textAlign(CENTER, CENTER);
         if(fontFile == null){
-            textSize(64); // only when no fontFile is specified
+            textSize(32); // only when no fontFile is specified
         } else {
             //TODO load fontFile size from its name (min size 32) - writ it to DOCUMENTATION - https://fontlibrary.org/
             int fontSize;
@@ -194,11 +195,16 @@ public class Main extends PApplet {
         //Video settings
         recording = false;
         recordedFrames = 0;
-        frameRate(30);
+        frameRate(24);
 
         //Song playing
         Thread songPlayer = new Thread(() -> song.play()); //TODO play song in another thread, this code is non-sense
         songPlayer.start();
+    }
+
+    private void setColors() {
+        satureColor = srcImage.pixels[(int)random(srcImage.pixels.length-1)]; //TODO finding saturated color
+        notSatureColor = srcImage.pixels[(int)random(srcImage.pixels.length-1)]; //TODO finding not sature color
     }
 
     public void draw() {
@@ -216,7 +222,9 @@ public class Main extends PApplet {
 //        image(maskImage,0,0); //TODO fix mask render - not working for some random reason
 
         //Video generator
-        record();
+        if (recording && song.isPlaying()) {
+            record();
+        }
 
         diplaySongPositionBar(songPositionBarHeight);
     }
@@ -244,13 +252,12 @@ public class Main extends PApplet {
         maskImage.updatePixels();
     }
 
+    ExecutorService threadService = Executors.newFixedThreadPool(4);
     private void record() {
-        if(recording){
-            String timeStamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new java.util.Date());
-            EventQueue.invokeLater(() -> saveFrame(inputFolder + "/output/" + timeStamp + "####.tiff"));
-            recordedFrames++;
-            displayRecordingIndic();
-        }
+        String timeStamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new java.util.Date());
+        threadService.submit(() -> saveFrame(inputFolder + "/output/" + timeStamp + "####.png"));
+        recordedFrames++;
+//        displayRecordingIndic();
     }
 
     private void diplaySongPositionBar(float barHeight) {
@@ -298,9 +305,9 @@ public class Main extends PApplet {
         //        fft.noAverages();
         fft.logAverages(22, 6); //miBandWidth - herz nejnizzi oktavy, vysledek bude obsahovat 10x pocet oktav ruznych prumeru
         fft.forward(song.mix);
-        float[] spectrumAmps = new float[fft.avgSize()]; //TODO averages size vs spectrum size
+        float[] spectrumAmps = new float[fft.avgSize()];
         for (int i = 0; i < spectrumAmps.length; i++){
-            spectrumAmps[i] = fft.getBand(i);
+            spectrumAmps[i] = fft.getAvg(i);
         }
         return spectrumAmps;
     }
@@ -321,8 +328,8 @@ public class Main extends PApplet {
             song.skip(-12000);
         } else if (key == 's') { //stop playing
             if(song.isPlaying()) {
-                song.rewind();
                 song.pause();
+                song.rewind();
             }
         } else if(key == ' '){ //pause or play
             if(song.isPlaying()){song.pause();}
@@ -344,10 +351,21 @@ public class Main extends PApplet {
                 ((SRTWriterWrapper) srtHandler).writeNext(song.position(), song.position() + 2000); //end after half a second
             }
         }
+        //COLORS SETTING
+        else if(key == 'c'){
+            setColors();
+        }
     }
 
     @Override
     public void dispose(){
+        threadService.shutdown();
+        try {
+            threadService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+        } catch (InterruptedException e) {
+            System.err.println("Saving frames took too long...");
+            e.printStackTrace();
+        }
         if(srtCreatorMode){
             ((SRTWriterWrapper) srtHandler).saveFile();
         }
@@ -391,19 +409,17 @@ public class Main extends PApplet {
 //                }
             }
 
-            fill(0,120);
-            blob.render();
+            float level = song.mix.level();
 
             noStroke();
-            float level = song.mix.level();
             fill(255);
-            pushMatrix();
-            translate(center.x,center.y);//TODO rotation and translation?
-            rotate(level);
-            popMatrix();
+//            pushMatrix();
+//            translate(center.x,center.y);//TODO rotation and translation?
+//            rotate(level);
+//            popMatrix();
 
             for(int i = 1; i < 20*level; i++) {
-                particles.add(new Particle(new PVector(random(width), height), random(10)));
+                particles.add(new Particle(new PVector(random(width), height), random(15)));
             }
 
             for (int i = 0; i < particles.size(); i++) {
@@ -414,6 +430,11 @@ public class Main extends PApplet {
                     particles.remove(i);
                 }
             }
+            pushStyle();
+            stroke(lerpColor(notSatureColor,satureColor,map(level,0,0.2f,0,1)));
+            fill(0,120);
+            blob.render();
+            popStyle();
         }
     }
 
@@ -475,7 +496,7 @@ public class Main extends PApplet {
             vel = new PVector(vx, vy);
 
             acc = new PVector(0, 0);
-            lifespan = 500 + 600/size;
+            lifespan = 500 + 650/size;
 
             color = srcImage.pixels[(int)random(srcImage.pixels.length)];
         }
@@ -527,9 +548,11 @@ public class Main extends PApplet {
             this.w = w;
             this.h = h;
             this.amps = amps.clone();
-            if (h < 0) {
-                for (int i = 0; i < amps.length; i++) {
-                    this.amps[i] *= (-1); //revert the amplitude if the wave is upside down
+            for (int i = 0; i < amps.length; i++) {
+                if ((h < 0)) {
+                    this.amps[i] *= (- (1.1+i/5)); //revert the amplitude if the wave is upside down and scale it
+                } else {
+                    this.amps[i] *= (1.1+i/10);
                 }
             }
         }
@@ -580,61 +603,4 @@ public class Main extends PApplet {
             popMatrix();
         }
     }
-
-//    class Ball { //TODO something like this in 2D: https://www.youtube.com/watch?v=mEp_CtJHF0c
-//
-//        PVector pos;
-//        float diameter;
-//
-//        int id;
-//
-//        Ball(PVector pos, float din) {
-//            diameter = din;
-//        }
-//
-//        void collide() {
-//            for (int i = id + 1; i < numBalls; i++) {
-//                float dx = others[i].x - x;
-//                float dy = others[i].y - y;
-//                float distance = sqrt(dx * dx + dy * dy);
-//                float minDist = others[i].diameter / 2 + diameter / 2;
-//                if (distance < minDist) {
-//                    float angle = atan2(dy, dx);
-//                    float targetX = x + cos(angle) * minDist;
-//                    float targetY = y + sin(angle) * minDist;
-//                    float ax = (targetX - others[i].x) * spring;
-//                    float ay = (targetY - others[i].y) * spring;
-//                    vx -= ax;
-//                    vy -= ay;
-//                    others[i].vx += ax;
-//                    others[i].vy += ay;
-//                }
-//            }
-//        }
-//
-//        void move() {
-//            //TODO back to previous position
-//            x += vx;
-//            y += vy;
-//            if (x + diameter / 2 > w) {
-//                x = w - diameter / 2;
-//                vx *= friction;
-//            } else if (x - diameter / 2 < 0) {
-//                x = diameter / 2;
-//                vx *= friction;
-//            }
-//            if (y + diameter / 2 > h) {
-//                y = h - diameter / 2;
-//                vy *= friction;
-//            } else if (y - diameter / 2 < 0) {
-//                y = diameter / 2;
-//                vy *= friction;
-//            }
-//        }
-//
-//        void display() {
-//            ellipse(x, y, diameter, diameter);
-//        }
-//    }
-
 }
