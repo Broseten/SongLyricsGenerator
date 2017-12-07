@@ -11,6 +11,7 @@ import org.apache.commons.io.FilenameUtils;
 import processing.core.*;
 
 import javax.swing.*;
+import java.awt.*;
 import java.io.IOException;
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -246,7 +247,7 @@ public class Main extends PApplet {
     private void record() {
         if(recording){
             String timeStamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new java.util.Date());
-            saveFrame(inputFolder + "/output/"+timeStamp+"####.tiff");
+            EventQueue.invokeLater(() -> saveFrame(inputFolder + "/output/" + timeStamp + "####.tiff"));
             recordedFrames++;
             displayRecordingIndic();
         }
