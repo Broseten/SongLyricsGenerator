@@ -32,9 +32,9 @@ public class Main extends PApplet {
     }
 
     public void settings(){
-//        fullScreen();
+        fullScreen();
 //        size(1024,576); //16:9
-        size(1280,720);
+//        size(1280,720);
         //MINIM
         minim = new Minim(new MinimFileSystemHandler());
 
@@ -343,7 +343,7 @@ public class Main extends PApplet {
                 System.out.println("Recording started...");
                 recordedFrames = 0;
             }
-            recording = !recording;
+//            recording = !recording;
         }
         //WRITING LYRICS
         else if (key == 'w'){
@@ -393,14 +393,14 @@ public class Main extends PApplet {
                 waves[i].render();
             }
             for (int i = 0; i < spectrumAmps.length; i++) {
-                float amnt = map(spectrumAmps[i], 0, 6f, 0, 1);
+                float amnt = map(spectrumAmps[i], 0, 20f, 0, 1);
                 int c = lerpColor(notSatureColor,satureColor,amnt);
 //                fill(255);
                 stroke(c);
                 noFill();
                 float x = map(i, 0, spectrumAmps.length,0,width/2);
 //                float xStep = w/(float)spectrumAmps.length;
-                float lineHeightMult = 10;
+                float lineHeightMult = 6;
                 bezier(x, height,x-random(-20,20),height-spectrumAmps[i]*lineHeightMult/2,x+random(-20,20),height-spectrumAmps[i]*lineHeightMult/2,x,height-spectrumAmps[i]*lineHeightMult);
                 bezier(width-x, height,width-x+random(-20,20),height-spectrumAmps[i]*lineHeightMult/2,width-x+random(-20,20),height-spectrumAmps[i]*lineHeightMult/2,width-x,height-spectrumAmps[i]*lineHeightMult);
 //                if(10 < i && i < 30 && spectrumAmps[i] > 6){
