@@ -61,7 +61,6 @@ public class SRTWriterWrapper implements SRTHandler {
         } catch (IOException e) {
             System.err.println("File already exists: " + out.getPath());
             e.printStackTrace();
-            return;
         } catch (SRTWriterException e) {
             System.err.println("Could not save srt file.");
             e.printStackTrace();

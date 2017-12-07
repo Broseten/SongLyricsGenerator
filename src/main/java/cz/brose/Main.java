@@ -11,7 +11,6 @@ import org.apache.commons.io.FilenameUtils;
 import processing.core.*;
 
 import javax.swing.*;
-import java.awt.*;
 import java.io.IOException;
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -19,9 +18,8 @@ import java.util.ArrayList;
 
 /**
  * TODO analyze sound offline (video offline?)
- * TODO noise display (plynuly prechody mezi barvama - source and final color a prechodova barva mezi tim)
- *
- * TODO before jar build - fix file paths
+ * TODO better colors
+ * TODO fix images... not working in java for some reasons
  *
  * @author Vojtech Bruza
  */
@@ -32,12 +30,13 @@ public class Main extends PApplet {
 
     public void settings(){
 //        fullScreen();
-        size(1920,1080); //16:9
+//        size(1024,576); //16:9
+        size(1920,1080);
         //MINIM
         minim = new Minim(new MinimFileSystemHandler());
 
         try {
-            //Select folder with: song, srt, font, color source, (background and mask image):
+            //Select folder with: song, srt, fontFile, color source, (background and mask image):
             JFileChooser chooser = new JFileChooser();
             chooser.setCurrentDirectory(new java.io.File("."));
             chooser.setDialogTitle("Select folder with song files:");
@@ -105,10 +104,8 @@ public class Main extends PApplet {
                             textToDisplay = srtHandler.getNextLyrics(0);
                         }
                         break;
-                    case "ttf": //font
-                        //TODO load font size from its name (min size 32) - writ it to DOCUMENTATION - https://fontlibrary.org/
-                        int fontSize = Integer.parseInt(folderFile.getName().replaceAll("[\\D]", ""));
-                        font = createFont(folderFile.getAbsolutePath(), fontSize > 32 ? fontSize : 32);
+                    case "ttf": case "otf": //fontFile
+                        fontFile = folderFile;
                         break;
                     default:
                 }
@@ -128,8 +125,8 @@ public class Main extends PApplet {
                 //TODO load default
                 System.out.println("User specified mask image must contain \"mask\" in file name");
             }
-            if(font == null){
-                System.out.println("No font specified, using default...");
+            if(fontFile == null){
+                System.out.println("No fontFile specified, using default...");
             }
         }
     }
@@ -146,11 +143,14 @@ public class Main extends PApplet {
     private PImage srcImage; //color source
     private PImage backgroundImage; //color source
     private PImage maskImage; //color source
+    private int satureColor; //from source img
+    private int notSatureColor; //from source img
+    private int maxSatuBrighAlph; //max saturation, brightness and alpha value
     //Lyrics
     private String textToDisplay;
     private SRTHandler srtHandler;
     private boolean srtCreatorMode;
-    PFont font;
+    File fontFile;
     //Recording
     private boolean recording;
     private long recordedFrames;
@@ -161,22 +161,33 @@ public class Main extends PApplet {
 
         //Default style
         noStroke();
-        colorMode(HSB,360,100,100,100);
+        maxSatuBrighAlph = 100;
         background(0);
 
         //Graphics
         graphicArts = new GraphicArts();
         srcImage.loadPixels();
+        satureColor = srcImage.pixels[(int)random(srcImage.pixels.length-1)]; //TODO finding saturated color
+        notSatureColor = srcImage.pixels[(int)random(srcImage.pixels.length-1)]; //TODO finding not sature color
         if (maskImage != null) {
             processMask();
         }
 
         //Text style
-        textAlign(CENTER);
-        if(font == null){
-            textSize(64); // only when no font is specified
+        textAlign(CENTER, CENTER);
+        if(fontFile == null){
+            textSize(64); // only when no fontFile is specified
         } else {
-            textFont(font); // size is set by the font itself
+            //TODO load fontFile size from its name (min size 32) - writ it to DOCUMENTATION - https://fontlibrary.org/
+            int fontSize;
+            try { //TODO remove redundant exception and check the input in some better way
+                fontSize = Integer.parseInt(fontFile.getName().replaceAll("[\\D]", ""));
+            } catch (NumberFormatException e) {
+                System.out.println("You can specify fontFile size by writing it to fontFile name (must not contain any other digits)");
+                fontSize = 32;
+            }
+            PFont font = createFont(fontFile.getAbsolutePath(), fontSize);
+            textFont(font);
         }
 
         //Video settings
@@ -185,12 +196,12 @@ public class Main extends PApplet {
         frameRate(30);
 
         //Song playing
-        Thread songPlayer = new Thread(() -> song.play()); //TODO play song in another thread
+        Thread songPlayer = new Thread(() -> song.play()); //TODO play song in another thread, this code is non-sense
         songPlayer.start();
     }
 
     public void draw() {
-        clearBG(50);
+        clearBG();
 
         //Analyze
         float[] spectrumAmps = getSpectrum(); //be able do this offline
@@ -198,10 +209,10 @@ public class Main extends PApplet {
         graphicArts.display(spectrumAmps);
 
         //Lyrics //TODO correct text blending and appearing
-        drawLyrics(100); //SLOWS down the sketch a lot!! //TODO in different thread
+        drawLyrics(); //SLOWS down the sketch a lot!! //TODO in different thread
 
         //Mask
-//        image(maskImage,0,0);
+//        image(maskImage,0,0); //TODO fix mask render - not working for some random reason
 
         //Video generator
         record();
@@ -212,7 +223,7 @@ public class Main extends PApplet {
     private void displayRecordingIndic() {
         pushStyle();
         blendMode(BLEND);
-        fill(360,0,0);
+        fill(255,0,0);
         ellipse(10,height-10,30,30);
         popStyle();
     }
@@ -221,11 +232,12 @@ public class Main extends PApplet {
      * Processes alpha channel of the image mask (white to transparent, black nontransparent)
      */
     private void processMask(){
+        maskImage.resize(width,height);//to resize picture mask to current screen size
         maskImage.loadPixels();
         for (int i = 0; i < maskImage.width; i++){
             for(int j = 0; j < maskImage.height; j++){
-                int col = maskImage.pixels[i + width*j];
-                maskImage.pixels[i + width*j] = color(0,360-brightness(color(col)));
+                int c = color(maskImage.pixels[i + width*j]);
+                maskImage.pixels[i + width*j] = color(0,255-blue(c));
             }
         }
         maskImage.updatePixels();
@@ -234,7 +246,7 @@ public class Main extends PApplet {
     private void record() {
         if(recording){
             String timeStamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new java.util.Date());
-            saveFrame(inputFolder + "/output/"+timeStamp+"####.jpg");
+            saveFrame(inputFolder + "/output/"+timeStamp+"####.tiff");
             recordedFrames++;
             displayRecordingIndic();
         }
@@ -243,18 +255,17 @@ public class Main extends PApplet {
     private void diplaySongPositionBar(float barHeight) {
         if(mouseY > height - 2*barHeight) {
             pushStyle();
-            fill(300);
+            fill(200);
             rect(0, height - barHeight, map(song.position(), 0, song.length(), 0, width), height);
             popStyle();
         }
     }
 
-    private void drawLyrics(int fill) {
+    private void drawLyrics() {
         pushMatrix();
         pushStyle();
         textToDisplay = srtHandler.getNextLyrics(song.position());
-        blendMode(ADD);
-        fill(fill);
+        fill(255);
         translate(center.x,center.y);
         if(textWidth(textToDisplay) > width){ //if the text does not fit the screen size, make it two rows long
             for (int i = textToDisplay.length()/2; i < textToDisplay.length(); i++){
@@ -264,15 +275,18 @@ public class Main extends PApplet {
                 }
             }
         }
-        text(textToDisplay,0,-50);
+        text(textToDisplay,0,-height/8);
         popStyle();
         popMatrix();
     }
 
-    private void clearBG(int rgbSubtract) {
+    private void clearBG() {
         pushStyle();
-        blendMode(SUBTRACT);
-        fill(rgbSubtract);
+        if(backgroundImage == null){
+            fill(0,40);
+        } else {
+//            image(backgroundImage,0,0); //TODO fix images
+        }
         rect(0, 0, width, height);
         popStyle();
     }
@@ -345,7 +359,7 @@ public class Main extends PApplet {
      */
     private class GraphicArts{
         ArrayList<Particle> particles = new ArrayList<>();
-        Blob blob = new Blob(center.copy(),50);
+        Blob blob = new Blob(center.copy(),100);
         Wave[] waves = new Wave[4];
 
         public void display(float[] spectrumAmps){
@@ -355,14 +369,14 @@ public class Main extends PApplet {
             waves[1] = new Wave(center.x,center.y,width/2,-8,spectrumAmps);
             waves[2] = new Wave(center.x,center.y,-width/2,8,spectrumAmps);
             waves[3] = new Wave(center.x,center.y,-width/2,-8,spectrumAmps);
-            fill(360);
+            fill(255);
             for (int i = 0; i < waves.length; i++) {
                 waves[i].render();
             }
             for (int i = 0; i < spectrumAmps.length; i++) {
                 float amnt = map(spectrumAmps[i], 0, 6f, 0, 1);
-                int c = lerpColor(color(300,100,100),color(200,100,100),amnt);
-//                fill(360);
+                int c = lerpColor(notSatureColor,satureColor,amnt);
+//                fill(255);
                 stroke(c);
                 noFill();
                 float x = map(i, 0, spectrumAmps.length,0,width/2);
@@ -376,12 +390,12 @@ public class Main extends PApplet {
 //                }
             }
 
-            fill(0,50);
+            fill(0,120);
             blob.render();
 
             noStroke();
             float level = song.mix.level();
-            fill(360);
+            fill(255);
             pushMatrix();
             translate(center.x,center.y);//TODO rotation and translation?
             rotate(level);
@@ -451,7 +465,7 @@ public class Main extends PApplet {
         int color;
 
         Particle(PVector pos, float size) {
-            //TODO remove acc to make the sketch run faster
+            //remove acc to make the sketch run faster
             this.size = size;
             this.pos = pos.copy();
 
