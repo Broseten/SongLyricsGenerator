@@ -33,8 +33,8 @@ public class Main extends PApplet {
 
     public void settings(){
         fullScreen();
-//        size(1024,576); //16:9
-//        size(1280,720);
+//        size(3508,2480); //300dpi A4
+//        size(1280,720); 16:9
         //MINIM
         minim = new Minim(new MinimFileSystemHandler());
 
@@ -65,7 +65,7 @@ public class Main extends PApplet {
             exit();
         } else {
             println("Selected folder: " + selection.getName());
-            inputFolder = selection.getAbsolutePath();
+            inputFolderPath = selection.getAbsolutePath();
             File[] folderFiles = selection.listFiles();
             boolean srtFound = false;
             for (File folderFile : folderFiles) {
@@ -136,7 +136,7 @@ public class Main extends PApplet {
 
     private PVector center;
 
-    private String inputFolder;
+    private String inputFolderPath;
     //Song
     private Minim minim;
     private AudioPlayer song;
@@ -198,8 +198,8 @@ public class Main extends PApplet {
         frameRate(24);
 
         //Song playing
-        Thread songPlayer = new Thread(() -> song.play()); //TODO play song in another thread, this code is non-sense
-        songPlayer.start();
+//        Thread songPlayer = new Thread(() -> song.play()); //TODO play song in another thread, this code is non-sense
+//        songPlayer.start();
     }
 
     private void setColors() {
@@ -222,7 +222,10 @@ public class Main extends PApplet {
 //        image(maskImage,0,0); //TODO fix mask render - not working for some random reason
 
         //Video generator
-        if (recording && song.isPlaying()) {
+        if(!song.isPlaying()){
+            recording = false;
+        }
+        if (recording) {
             record();
         }
 
@@ -231,7 +234,6 @@ public class Main extends PApplet {
 
     private void displayRecordingIndic() {
         pushStyle();
-        blendMode(BLEND);
         fill(255,0,0);
         ellipse(10,height-10,30,30);
         popStyle();
@@ -252,10 +254,14 @@ public class Main extends PApplet {
         maskImage.updatePixels();
     }
 
+    private String timeStamp(){
+        return new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new java.util.Date());
+    }
+
     ExecutorService threadService = Executors.newFixedThreadPool(4);
     private void record() {
-        String timeStamp = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new java.util.Date());
-        threadService.submit(() -> saveFrame(inputFolder + "/output/" + timeStamp + "####.png"));
+        String timeStamp = timeStamp();
+        threadService.submit(() -> saveFrame(inputFolderPath + "/output/" + timeStamp + "####.png"));
         recordedFrames++;
 //        displayRecordingIndic();
     }
@@ -343,7 +349,7 @@ public class Main extends PApplet {
                 System.out.println("Recording started...");
                 recordedFrames = 0;
             }
-//            recording = !recording;
+            recording = !recording;
         }
         //WRITING LYRICS
         else if (key == 'w'){
