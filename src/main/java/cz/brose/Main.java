@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * TODO analyze sound offline (video offline?)
  * TODO better colors
- * TODO fix images... not working in java for some reasons
+ * TODO fix images... not working
  *
  * @author Vojtech Bruza
  */
@@ -33,8 +33,9 @@ public class Main extends PApplet {
 
     public void settings(){
         fullScreen(P3D);
+//        size(1920,1080,P3D); //16:9
+//        size(1280,720,P3D); //16:9
 //        size(3508,2480,P3D); //300dpi A4
-//        size(1280,720,P3D); 16:9
         //MINIM
         minim = new Minim(new MinimFileSystemHandler());
 
@@ -78,14 +79,16 @@ public class Main extends PApplet {
                             System.err.println("Just one mp3 file is supported");
                         }
                         break;
-                    case "png": case "jpeg": case "jpg": ///TODO doc accepted formats
+                    case "png":
+                        if(folderFile.getName().contains("mask")) {
+                            if (maskImage == null) { //TODO loading more of them and be able to cycle through it
+                                maskImage = loadImage(folderFile.getAbsolutePath());
+                            }
+                        } //no break
+                    case "jpeg": case "jpg": ///TODO doc accepted formats
                         if(folderFile.getName().contains("background")){
                             if (backgroundImage == null) {
                                 backgroundImage = loadImage(folderFile.getAbsolutePath());
-                            }
-                        } else if(folderFile.getName().contains("mask")){
-                            if (maskImage == null) { //TODO loading more of them and be able to cycle through it
-                                maskImage = loadImage(folderFile.getAbsolutePath());
                             }
                         } else if (srcImage == null) { //load any other default image as color source image
                             srcImage = loadImage(folderFile.getAbsolutePath());
@@ -171,9 +174,11 @@ public class Main extends PApplet {
         graphicArts = new GraphicArts();
         srcImage.loadPixels();
         setColors();
-        if (maskImage != null) {
-            processMask();
-        }
+//        if (maskImage != null) {
+//            processMask();
+//        }
+        hint(DISABLE_OPTIMIZED_STROKE); //to fix the stroke drawing issue in P3D
+//        hint(ENABLE_DEPTH_SORT); //to fix image drawing with openGL
 
         //Text style
         textAlign(CENTER, CENTER);
@@ -208,7 +213,7 @@ public class Main extends PApplet {
     }
 
     public void draw() {
-        clearBG();
+        clearBG(40);
 
         //Analyze
         float[] spectrumAmps = getSpectrum(); //be able do this offline
@@ -219,7 +224,10 @@ public class Main extends PApplet {
         drawLyrics(); //SLOWS down the sketch a lot!! //TODO in different thread
 
         //Mask
-//        image(maskImage,0,0); //TODO fix mask render - not working for some random reason
+//        if(maskImage != null) {
+//            processMask(); //TODO fix masks opacity - not working for some unknown reason
+//            image(maskImage, 0, 0, width, height);
+//        }
 
         //Video generator
         if(!song.isPlaying()){
@@ -240,15 +248,14 @@ public class Main extends PApplet {
     }
 
     /**
-     * Processes alpha channel of the image mask (white to transparent, black nontransparent)
+     * Processes alpha channel of the image mask based on pixels brightness
      */
     private void processMask(){
-        maskImage.resize(width,height);//to resize picture mask to current screen size
+        maskImage.filter(THRESHOLD);
         maskImage.loadPixels();
-        for (int i = 0; i < maskImage.width; i++){
-            for(int j = 0; j < maskImage.height; j++){
-                int c = color(maskImage.pixels[i + width*j]);
-                maskImage.pixels[i + width*j] = color(0,255-blue(c));
+        for (int i = 0; i < maskImage.pixels.length; i++){
+            if(brightness(maskImage.pixels[i]) > 0){
+                maskImage.pixels[i] = color(0,0,0,0); //full opacity
             }
         }
         maskImage.updatePixels();
@@ -294,12 +301,16 @@ public class Main extends PApplet {
         popMatrix();
     }
 
-    private void clearBG() {
+    private void clearBG(){
+        clearBG(255);
+    }
+    private void clearBG(int alpha) {
         pushStyle();
         if(backgroundImage == null){
-            fill(0,40);
+            fill(0,alpha);
         } else {
-//            image(backgroundImage,0,0); //TODO fix images
+//            tint(alpha);
+//            image(backgroundImage,0,0,width,height); //TODO fix images
         }
         rect(0, 0, width, height);
         popStyle();
@@ -321,6 +332,7 @@ public class Main extends PApplet {
     @Override
     public void mousePressed() {
         if(mouseY > height - 2 * songPositionBarHeight){ //setSong position
+            clearBG();
             song.cue((int) map(mouseX,0, width, 0, song.length()));
         }
     }
@@ -329,8 +341,10 @@ public class Main extends PApplet {
     public void keyPressed() {
         // SONG CONTROL
         if (key == '+') { //fast forward
+            clearBG();
             song.skip(12000);
         } else if (key == '-') { //backward
+            clearBG();
             song.skip(-12000);
         } else if (key == 's') { //stop playing
             if(song.isPlaying()) {
@@ -529,11 +543,13 @@ public class Main extends PApplet {
 
         // Method to display
         void render() {
+            pushStyle();
             imageMode(CENTER);
             tint(255, lifespan);
             fill(color,lifespan);
             noStroke();
             ellipse(pos.x, pos.y,size,size);
+            popStyle();
         }
 
         // Is the particle still useful?
