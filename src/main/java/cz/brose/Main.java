@@ -32,9 +32,9 @@ public class Main extends PApplet {
     }
 
     public void settings(){
-        fullScreen();
-//        size(3508,2480); //300dpi A4
-//        size(1280,720); 16:9
+        fullScreen(P3D);
+//        size(3508,2480,P3D); //300dpi A4
+//        size(1280,720,P3D); 16:9
         //MINIM
         minim = new Minim(new MinimFileSystemHandler());
 
@@ -377,6 +377,7 @@ public class Main extends PApplet {
         }
         song.close();
         minim.stop();
+        super.dispose();
     }
 
     /**
